@@ -1,0 +1,51 @@
+name: Publish Ciona Atlas
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download verified geometry
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v1.0.0 --repo "$GITHUB_REPOSITORY" --pattern ciona-atlas-github-pages.zip --dir "$RUNNER_TEMP"
+          echo "e122e2ae9b05b5f213c26c1e72da0ed363eb41f5a8a3d17b5f52dc36891575a5  $RUNNER_TEMP/ciona-atlas-github-pages.zip" | sha256sum --check
+          mkdir -p _site/data
+          unzip -q "$RUNNER_TEMP/ciona-atlas-github-pages.zip" 'ciona-atlas/data/*' -d "$RUNNER_TEMP/geometry"
+          cp "$RUNNER_TEMP/geometry/ciona-atlas/data/"*.gz _site/data/
+          cp index.html viewer.js atlas.json classification.json manifest.webmanifest _site/
+          touch _site/.nojekyll
+          python - <<'PY'
+          import json, pathlib, gzip, hashlib
+          p=pathlib.Path('_site/atlas.json')
+          a=json.loads(p.read_text())
+          assert len(a['cells']) == 206
+          for c in a['cells']:
+              c['file']='data/'+pathlib.PurePosixPath(c['file']).name
+              raw=gzip.decompress((pathlib.Path('_site')/c['file']).read_bytes())
+              assert hashlib.sha256(raw).hexdigest()==c['sha256'], c['name']
+          p.write_text(json.dumps(a,ensure_ascii=False))
+          PY
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
