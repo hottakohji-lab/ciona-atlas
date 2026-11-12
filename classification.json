@@ -1,0 +1,250 @@
+{
+  "PNIN": {
+    "ids": [
+      "4",
+      "6",
+      "20",
+      "29",
+      "30",
+      "61",
+      "65"
+    ],
+    "color": [
+      0.98,
+      0.36,
+      0.34
+    ],
+    "source": "https://doi.org/10.1002/cne.24353",
+    "note": "Ryan et al. 2018 Table 1; PNIN label in that table. Other morphological classifications can overlap."
+  },
+  "ATEN PNIN": {
+    "ids": [
+      "46"
+    ],
+    "color": [
+      1,
+      0.76,
+      0.53
+    ],
+    "source": "https://doi.org/10.1002/cne.24353",
+    "note": "Ryan et al. 2018 Table 1."
+  },
+  "PBV PNIN": {
+    "ids": [
+      "160",
+      "162",
+      "163",
+      "164"
+    ],
+    "color": [
+      0.93,
+      0.36,
+      0.81
+    ],
+    "source": "https://doi.org/10.1002/cne.24353",
+    "note": "Posterior brain vesicle peripheral interneurons; Ryan et al. 2018 Table 1."
+  },
+  "BPIN": {
+    "ids": [
+      "90",
+      "92"
+    ],
+    "color": [
+      0.41,
+      0.92,
+      0.49
+    ],
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC6551260/",
+    "note": "Bipolar brain vesicle interneurons; Ryan and Meinertzhagen 2019 Table 1. Search alias PBIN is only a spelling aid."
+  },
+  "aaIN": {
+    "ids": [
+      "95",
+      "102",
+      "115"
+    ],
+    "color": [
+      0.68,
+      0.5,
+      0.31
+    ],
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC6551260/",
+    "note": "Anaxonal arborizing interneurons; 2019 Table 1."
+  },
+  "cor-ass BVIN": {
+    "ids": [
+      "1",
+      "2",
+      "15",
+      "23",
+      "38",
+      "55",
+      "59",
+      "60",
+      "62",
+      "68",
+      "70",
+      "73",
+      "78",
+      "79"
+    ],
+    "color": [
+      0.62,
+      0.38,
+      0.77
+    ],
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC6551260/",
+    "note": "Coronet-associated ciliated BVIN; 2019 Table 1 also lists 65, shown here under PNIN following 2018 Table 1."
+  },
+  "BVIN (cilia)": {
+    "ids": [
+      "3",
+      "13",
+      "17",
+      "18",
+      "21",
+      "22",
+      "24",
+      "33",
+      "41",
+      "42",
+      "43",
+      "48",
+      "50",
+      "85",
+      "88"
+    ],
+    "color": [
+      0.35,
+      0.72,
+      0.61
+    ],
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC6551260/",
+    "note": "Ciliated BVIN; 2019 Table 1 also lists 20,61,65,92, displayed under PNIN/BPIN here. Morphological and connectivity classes overlap."
+  },
+  "prRN": {
+    "ids": [
+      "80",
+      "86",
+      "96",
+      "100",
+      "121",
+      "126"
+    ],
+    "color": [
+      0.88,
+      0.89,
+      0.45
+    ],
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC6551260/",
+    "note": "Photoreceptor relay neurons; 2019 Table 1."
+  },
+  "pr-AMG RN": {
+    "ids": [
+      "74",
+      "94",
+      "108",
+      "116",
+      "124",
+      "127",
+      "140",
+      "157"
+    ],
+    "color": [
+      0.99,
+      0.57,
+      0.2
+    ],
+    "source": "https://doi.org/10.1002/cne.24353",
+    "note": "Ryan et al. 2018 Table 1."
+  },
+  "pr-BTN RN": {
+    "ids": [
+      "123",
+      "130"
+    ],
+    "color": [
+      0.74,
+      0.74,
+      0.27
+    ],
+    "source": "https://doi.org/10.1002/cne.24353",
+    "note": "Ryan et al. 2018 Table 1."
+  },
+  "PNRN": {
+    "ids": [
+      "131"
+    ],
+    "color": [
+      0.48,
+      0.82,
+      0.94
+    ],
+    "source": "https://doi.org/10.1002/cne.24353",
+    "note": "Ryan et al. 2018 Table 1."
+  },
+  "Eminens": {
+    "ids": [
+      "109",
+      "99"
+    ],
+    "color": [
+      1,
+      0.52,
+      0.68
+    ],
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC6551260/",
+    "note": "Em1=109, Em2=99; 2019 Table 1."
+  },
+  "ddN": {
+    "ids": [
+      "ddNL",
+      "ddNR"
+    ],
+    "color": [
+      0.33,
+      0.45,
+      0.95
+    ],
+    "source": "https://doi.org/10.1002/cne.24353",
+    "note": "Named ddN meshes; 2018 Table 1 uses ddL/ddR."
+  },
+  "PMGN": {
+    "ids": [
+      "PMGN1",
+      "PMGN2"
+    ],
+    "color": [
+      0.38,
+      0.64,
+      0.51
+    ],
+    "source": "mesh name",
+    "note": "Group from explicit mesh name."
+  },
+  "Ant": {
+    "ids": [
+      "Ant1",
+      "Ant2"
+    ],
+    "color": [
+      0.95,
+      0.87,
+      0.7
+    ],
+    "source": "mesh name",
+    "note": "Group from explicit mesh name."
+  },
+  "trIN": {
+    "ids": [
+      "trIN"
+    ],
+    "color": [
+      0.69,
+      0.81,
+      0.97
+    ],
+    "source": "mesh name",
+    "note": "Group from explicit mesh name."
+  }
+}
