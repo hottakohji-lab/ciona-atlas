@@ -1,4 +1,31 @@
 'use strict';
+// 背景だけを切り替え、形態・発現・カメラの状態は維持する。
+let atlasTheme='dark';
+const atlasThemePalettes={
+  dark:{clear:[.055,.079,.115],outline:[.78,.84,.9],captionBg:'#10161fe8',captionInk:'#dce8f0',chrome:'#10161f'},
+  light:{clear:[1,1,1],outline:[.27,.34,.40],captionBg:'#fffffff2',captionInk:'#334155',chrome:'#ffffff'}
+};
+function atlasPalette(){return atlasThemePalettes[atlasTheme];}
+function setAtlasTheme(value,redraw=true){
+  atlasTheme=value==='light'?'light':'dark';
+  document.documentElement.dataset.theme=atlasTheme;
+  const button=$('theme-toggle');
+  if(button){
+    button.textContent=atlasTheme==='light'?'背景：白':'背景：暗色';
+    button.setAttribute('aria-pressed',String(atlasTheme==='light'));
+    button.setAttribute('aria-label',atlasTheme==='light'?'背景を暗色に切り替える':'背景を白に切り替える');
+    button.title=atlasTheme==='light'?'暗色の背景に切り替え':'白い背景に切り替え';
+  }
+  const meta=document.querySelector('meta[name="theme-color"]');
+  if(meta)meta.content=atlasPalette().chrome;
+  if(redraw)draw();
+}
+function initAtlasTheme(){
+  // 確認用の短いURLにも対応。共有リンクのテーマはrestoreViewで優先する。
+  setAtlasTheme(new URLSearchParams(location.search).get('theme'),false);
+  $('theme-toggle').onclick=()=>setAtlasTheme(atlasTheme==='light'?'dark':'light');
+}
+
 // ネットワーク上のサービスを使わず、同じフォルダの実形態だけを描画する。
 const $=id=>document.getElementById(id),canvas=$('scene');
 const gl=canvas.getContext('webgl',{antialias:true,preserveDrawingBuffer:true});
@@ -153,11 +180,11 @@ function rebuildBodyOutline(){
   if(!bodyOutlineGpu){
     const p=gl.createProgram();
     gl.attachShader(p,shader(gl.VERTEX_SHADER,`attribute vec3 aPos,aNormal;uniform vec3 uCenter;uniform float uRadius,uZoom,uAspect;uniform vec2 uPan;uniform mat3 uRot;varying vec3 vNormal;void main(){vec3 p=uRot*((aPos-uCenter)/uRadius);gl_Position=vec4(p.x*uZoom/uAspect+uPan.x,p.y*uZoom+uPan.y,-p.z/12.0,1.0);vNormal=uRot*aNormal;}`));
-    gl.attachShader(p,shader(gl.FRAGMENT_SHADER,`precision mediump float;uniform float uOpacity;varying vec3 vNormal;void main(){float edge=pow(1.0-abs(normalize(vNormal).z),2.5);gl_FragColor=vec4(.78,.84,.9,uOpacity*(.16+.84*edge));}`));
+    gl.attachShader(p,shader(gl.FRAGMENT_SHADER,`precision mediump float;uniform float uOpacity;uniform vec3 uOutlineColor;varying vec3 vNormal;void main(){float edge=pow(1.0-abs(normalize(vNormal).z),2.5);gl_FragColor=vec4(uOutlineColor,uOpacity*(.16+.84*edge));}`));
     // 神経用の属性番号を共用し、別のシェーダーへ戻したときも選択描画を保つ。
     for(const name of ['aPos','aNormal'])gl.bindAttribLocation(p,gl.getAttribLocation(prog,name),name);
     gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(p));
-    const uniforms={};for(const n of ['uCenter','uRadius','uZoom','uAspect','uPan','uRot','uOpacity'])uniforms[n]=gl.getUniformLocation(p,n);
+    const uniforms={};for(const n of ['uCenter','uRadius','uZoom','uAspect','uPan','uRot','uOpacity','uOutlineColor'])uniforms[n]=gl.getUniformLocation(p,n);
     bodyOutlineGpu={program:p,uniforms,v:gl.createBuffer(),e:gl.createBuffer()};
   }
   gl.bindBuffer(gl.ARRAY_BUFFER,bodyOutlineGpu.v);gl.bufferData(gl.ARRAY_BUFFER,data.vertices,gl.STATIC_DRAW);
@@ -170,7 +197,7 @@ function renderBodyOutline(pick=false){
   gl.useProgram(g.program);gl.bindBuffer(gl.ARRAY_BUFFER,g.v);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,g.e);
   for(const [name,offset]of [['aPos',0],['aNormal',12]]){const a=gl.getAttribLocation(g.program,name);gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,3,gl.FLOAT,false,24,offset);}
   gl.uniformMatrix3fv(u.uRot,false,rotation);gl.uniform3fv(u.uCenter,center);gl.uniform1f(u.uRadius,radius);
-  gl.uniform1f(u.uZoom,zoom*Math.min(1,canvas.width/canvas.height));gl.uniform1f(u.uAspect,canvas.width/canvas.height);gl.uniform2fv(u.uPan,pan);gl.uniform1f(u.uOpacity,bodyOutlineState.opacity);
+  gl.uniform1f(u.uZoom,zoom*Math.min(1,canvas.width/canvas.height));gl.uniform1f(u.uAspect,canvas.width/canvas.height);gl.uniform2fv(u.uPan,pan);gl.uniform1f(u.uOpacity,bodyOutlineState.opacity);gl.uniform3fv(u.uOutlineColor,atlasPalette().outline);
   gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);
   gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);gl.drawElements(gl.TRIANGLES,g.count,gl.UNSIGNED_SHORT,0);
   gl.disable(gl.CULL_FACE);gl.disable(gl.BLEND);gl.depthMask(true);gl.useProgram(prog);
@@ -225,7 +252,7 @@ function initBodyOutline(){
     if(!bodyOutlineState.enabled)return originalSnapshot();
     render();const exported=document.createElement('canvas');exported.width=canvas.width;exported.height=canvas.height;
     const ctx=exported.getContext('2d');ctx.drawImage(canvas,0,0);const font=Math.max(14,Math.round(canvas.width/85));
-    ctx.fillStyle='#10161fe8';ctx.fillRect(0,exported.height-font*2.6,exported.width,font*2.6);ctx.fillStyle='#dce8f0';ctx.font=font+'px sans-serif';ctx.fillText(bodyOutlineState.layout==='literature'?'文献参考の輪郭：体表・背腹方向は推定':'参考輪郭：概形・実測ではありません',font,exported.height-font);
+    ctx.fillStyle=atlasPalette().captionBg;ctx.fillRect(0,exported.height-font*2.6,exported.width,font*2.6);ctx.fillStyle=atlasPalette().captionInk;ctx.font=font+'px sans-serif';ctx.fillText(bodyOutlineState.layout==='literature'?'文献参考の輪郭：体表・背腹方向は推定':'参考輪郭：概形・実測ではありません',font,exported.height-font);
     const a=document.createElement('a');a.download='ciona-atlas-reference-outline.png';a.href=exported.toDataURL('image/png');a.click();
   };
   syncBodyOutlineControls();
@@ -302,8 +329,8 @@ function initBodyAnatomy(){
  updateBodyAnatomy();
 }
 
-function saveView(){clearTimeout(saveTimer);saveTimer=setTimeout(()=>{let view={cells:[...shown].map(i=>cells[i].name),selected:[...selected].map(i=>cells[i].name),yaw,pitch,zoom,pan,center,radius,context:$('context').checked,marker:expressionMode,markerCandidates:$('expression-candidates').checked,rnaCandidates,expressionOnly:$('expression-auto-only').checked,bodyOutline:{...bodyOutlineState}};history.replaceState(null,'','#'+encodeURIComponent(JSON.stringify(view)));},350);}
-function restoreView(){try{if(!location.hash)return;let v=JSON.parse(decodeURIComponent(location.hash.slice(1)));if(!Array.isArray(v.cells))return;let ids=names=>new Set(cells.map((c,i)=>names.includes(c.name)?i:-1).filter(i=>i>=0));shown=ids(v.cells);expressionMode=markerModes.includes(v.marker)?v.marker:'morphology';$('expression-candidates').checked=!!v.markerCandidates;rnaCandidates=!!v.rnaCandidates;$('rna-candidates').checked=rnaCandidates;$('expression-auto-only').checked=v.expressionOnly!==false;restoreBodyOutline(v.bodyOutline);expressionLegend();$('context').checked=!!v.context;selected=ids(Array.isArray(v.selected)?v.selected:[]);if([v.yaw,v.pitch,v.zoom,v.radius,...v.pan,...v.center].every(Number.isFinite)&&v.radius>0&&v.zoom>0){yaw=v.yaw;pitch=v.pitch;zoom=v.zoom;radius=v.radius;pan=v.pan;center=v.center;}}catch(e){console.warn('表示リンクを読み込めません',e);}}
+function saveView(){clearTimeout(saveTimer);saveTimer=setTimeout(()=>{let view={cells:[...shown].map(i=>cells[i].name),selected:[...selected].map(i=>cells[i].name),yaw,pitch,zoom,pan,center,radius,context:$('context').checked,marker:expressionMode,markerCandidates:$('expression-candidates').checked,rnaCandidates,expressionOnly:$('expression-auto-only').checked,bodyOutline:{...bodyOutlineState},theme:atlasTheme};history.replaceState(null,'','#'+encodeURIComponent(JSON.stringify(view)));},350);}
+function restoreView(){try{if(!location.hash)return;let v=JSON.parse(decodeURIComponent(location.hash.slice(1)));if(!Array.isArray(v.cells))return;if(v.theme==='light'||v.theme==='dark')setAtlasTheme(v.theme,false);let ids=names=>new Set(cells.map((c,i)=>names.includes(c.name)?i:-1).filter(i=>i>=0));shown=ids(v.cells);expressionMode=markerModes.includes(v.marker)?v.marker:'morphology';$('expression-candidates').checked=!!v.markerCandidates;rnaCandidates=!!v.rnaCandidates;$('rna-candidates').checked=rnaCandidates;$('expression-auto-only').checked=v.expressionOnly!==false;restoreBodyOutline(v.bodyOutline);expressionLegend();$('context').checked=!!v.context;selected=ids(Array.isArray(v.selected)?v.selected:[]);if([v.yaw,v.pitch,v.zoom,v.radius,...v.pan,...v.center].every(Number.isFinite)&&v.radius>0&&v.zoom>0){yaw=v.yaw;pitch=v.pitch;zoom=v.zoom;radius=v.radius;pan=v.pan;center=v.center;}}catch(e){console.warn('表示リンクを読み込めません',e);}}
 $('share').onclick=async()=>{saveView();await new Promise(r=>setTimeout(r,400));try{await navigator.clipboard.writeText(location.href);$('share').textContent='リンクをコピーしました';setTimeout(()=>$('share').textContent='この表示のリンク',2000);}catch{prompt('このURLをコピーしてください',location.href);}};
 $('retry').onclick=()=>{failed.clear();draw();};
 $('menu').onclick=()=>document.body.classList.toggle('panel-open');$('closemenu').onclick=()=>document.body.classList.remove('panel-open');
@@ -312,7 +339,7 @@ function initGL(){if(!gl)throw Error('WebGLが無効です。Chromeのグラフ�
 function resize(){let d=Math.min(devicePixelRatio,2),w=Math.round(canvas.clientWidth*d),h=Math.round(canvas.clientHeight*d);if(w===canvas.width&&h===canvas.height)return;canvas.width=w;canvas.height=h;gl.bindTexture(gl.TEXTURE_2D,pickTex);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,w,h,0,gl.RGBA,gl.UNSIGNED_BYTE,null);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);gl.bindRenderbuffer(gl.RENDERBUFFER,pickDepth);gl.renderbufferStorage(gl.RENDERBUFFER,gl.DEPTH_COMPONENT16,w,h);gl.bindFramebuffer(gl.FRAMEBUFFER,pickFB);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,pickTex,0);gl.framebufferRenderbuffer(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.RENDERBUFFER,pickDepth);gl.bindFramebuffer(gl.FRAMEBUFFER,null);}
 function uniforms(pick){let cy=Math.cos(yaw),sy=Math.sin(yaw),cx=Math.cos(pitch),sx=Math.sin(pitch);rotation=new Float32Array([cy,sx*sy,-cx*sy,0,cx,sx,sy,-sx*cy,cx*cy]);gl.uniformMatrix3fv(loc.uRot,false,rotation);gl.uniform3fv(loc.uCenter,center);gl.uniform1f(loc.uRadius,radius);gl.uniform1f(loc.uZoom,zoom*Math.min(1,canvas.width/canvas.height));gl.uniform1f(loc.uAspect,canvas.width/canvas.height);gl.uniform2fv(loc.uPan,pan);gl.uniform1f(loc.uPick,pick?1:0);}
 function mesh(i,pick,ghost){let c=cells[i];if(!gpu.has(i)){requestMesh(i);return;}let b=gpu.get(i);gl.bindBuffer(gl.ARRAY_BUFFER,b.v);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,b.e);for(const [n,o]of [["aPos",0],["aNormal",12]]){let a=gl.getAttribLocation(prog,n);gl.vertexAttribPointer(a,3,gl.FLOAT,false,24,o);}let col=pick?[(i+1&255)/255,((i+1>>8)&255)/255,0]:atlasCellColor(c);gl.uniform3fv(loc.uColor,col);gl.uniform1f(loc.uAlpha,ghost?.055:1);gl.drawElements(gl.TRIANGLES,c.count,gl.UNSIGNED_INT,0);}
-let framePending=false;function draw(pick=false){if(!ready)return;if(!pick){if(framePending)return;framePending=true;requestAnimationFrame(()=>{framePending=false;render(false);});return;}render(true);}function render(pick=false){if(!ready)return;ensureAnatomicalLandmark();if(!pick)saveView();resize();gl.bindFramebuffer(gl.FRAMEBUFFER,pick?pickFB:null);gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(pick?0:.055,pick?0:.079,pick?0:.115,1);gl.depthMask(true);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);uniforms(pick);if(!pick)updateOrientation();const contextual=!pick&&$('context').checked&&selected.size>0;if(contextual){gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);for(const i of shown)if(!selected.has(i)&&!isPinnedLandmark(cells[i]))mesh(i,false,true);gl.disable(gl.BLEND);gl.depthMask(true);for(const i of shown)if(selected.has(i)||isPinnedLandmark(cells[i]))mesh(i,false,false);}else{gl.disable(gl.BLEND);for(const i of shown)mesh(i,pick,false);}renderBodyOutline(pick);renderBodyAnatomyLabels(pick);gl.bindFramebuffer(gl.FRAMEBUFFER,null);}
+let framePending=false;function draw(pick=false){if(!ready)return;if(!pick){if(framePending)return;framePending=true;requestAnimationFrame(()=>{framePending=false;render(false);});return;}render(true);}function render(pick=false){if(!ready)return;ensureAnatomicalLandmark();if(!pick)saveView();resize();gl.bindFramebuffer(gl.FRAMEBUFFER,pick?pickFB:null);gl.viewport(0,0,canvas.width,canvas.height);const clear=pick?[0,0,0]:atlasPalette().clear;gl.clearColor(...clear,1);gl.depthMask(true);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);uniforms(pick);if(!pick)updateOrientation();const contextual=!pick&&$('context').checked&&selected.size>0;if(contextual){gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);for(const i of shown)if(!selected.has(i)&&!isPinnedLandmark(cells[i]))mesh(i,false,true);gl.disable(gl.BLEND);gl.depthMask(true);for(const i of shown)if(selected.has(i)||isPinnedLandmark(cells[i]))mesh(i,false,false);}else{gl.disable(gl.BLEND);for(const i of shown)mesh(i,pick,false);}renderBodyOutline(pick);renderBodyAnatomyLabels(pick);gl.bindFramebuffer(gl.FRAMEBUFFER,null);}
 function bounds(ids){let min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity];for(const i of ids)for(let j=0;j<3;j++){min[j]=Math.min(min[j],cells[i].min[j]);max[j]=Math.max(max[j],cells[i].max[j]);}return {min,max};}
 function fit(ids){if(!ids.size)return;let {min,max}=bounds(ids);center=min.map((v,j)=>(v+max[j])/2);radius=Math.hypot(...max.map((v,j)=>(v-min[j])/2))||1;zoom=.86;pan=[0,0];draw();}
 function select(i,multi){multi=multi||$("multi").checked;if(!multi)selected.clear();if(multi&&selected.has(i))selected.delete(i);else selected.add(i);shown.add(i);update();draw();}
@@ -730,7 +757,7 @@ initExpressionPanel=function(){
 };
 
 function update(){ensureAnatomicalLandmark();updateBase();updateExpressionPanel();updateBodyAnatomy();}
-(async()=>{try{initGL();const r=await fetch('atlas.json');if(!r.ok)throw Error('データ一覧を取得できません');const meta=await r.json();cells=meta.cells;const cr=await fetch('classification.json');if(!cr.ok)throw Error('分類表を取得できません');const classes=await cr.json();for(const [g,entry]of Object.entries(classes)){colors[g]=entry.color;for(const c of cells)if(entry.ids.includes(c.name)){c.group=g;c.classificationNote=entry.note;c.classificationSource=entry.source;}}for(const c of cells){for(const g of ['MGIN','AMG','ACIN','BTN'])if(c.name.startsWith(g))c.group=g;}
+(async()=>{try{initAtlasTheme();initGL();const r=await fetch('atlas.json');if(!r.ok)throw Error('データ一覧を取得できません');const meta=await r.json();cells=meta.cells;const cr=await fetch('classification.json');if(!cr.ok)throw Error('分類表を取得できません');const classes=await cr.json();for(const [g,entry]of Object.entries(classes)){colors[g]=entry.color;for(const c of cells)if(entry.ids.includes(c.name)){c.group=g;c.classificationNote=entry.note;c.classificationSource=entry.source;}}for(const c of cells){for(const g of ['MGIN','AMG','ACIN','BTN'])if(c.name.startsWith(g))c.group=g;}
 for(const g of Object.keys(colors)){let item=document.createElement('span');let dot=document.createElement('i');dot.style.background=colorCSS(g);item.append(dot,document.createTextNode(g==='ATEN'?'aATEN (ATEN1–4)':g==='pr'?'光受容細胞 (pr)':g==='MN'?'運動ニューロン (MN)':g));$('legend').appendChild(item);}
 for(const g of ['全細胞',...Object.keys(colors)]){let b=document.createElement('button');b.textContent=g;if(colors[g]){b.style.borderLeft='5px solid '+colorCSS(g);}b.onclick=()=>{if(g==='全細胞'){showWhole();return;}filter=g;if(g!=='全細胞'){let ids=cells.map((c,i)=>({c,i})).filter(x=>x.c.group===g).map(x=>x.i);if(!$('multi').checked){selected=new Set();}ids.forEach(i=>{shown.add(i);selected.add(i);failed.delete(i);});}document.querySelectorAll('#groups button').forEach(x=>x.classList.toggle('active',x===b));update();draw();};$('groups').appendChild(b);}
 initExpressionPanel();initOrientation();initBodyOutline();initBodyAnatomy();shown=new Set(cells.map((c,i)=>i));selected=new Set();fit(shown);fitBodyOutline();restoreView();applyExpressionFilter(false);ready=true;$('loading').style.display='none';update();draw();new ResizeObserver(()=>draw()).observe(canvas);
