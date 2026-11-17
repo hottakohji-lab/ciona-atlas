@@ -3,9 +3,11 @@
 let atlasTheme='dark';
 const atlasThemePalettes={
   dark:{clear:[.055,.079,.115],outline:[.78,.84,.9],captionBg:'#10161fe8',captionInk:'#dce8f0',chrome:'#10161f'},
-  light:{clear:[1,1,1],outline:[.27,.34,.40],captionBg:'#fffffff2',captionInk:'#334155',chrome:'#ffffff'}
+  light:{clear:[1,1,1],outline:[.02,.02,.02],captionBg:'#fffffff2',captionInk:'#334155',chrome:'#ffffff'}
 };
 function atlasPalette(){return atlasThemePalettes[atlasTheme];}
+// 白背景の縁は標準で84.5%不透明。体表の中央の薄さは元のまま。
+function atlasBodyEdgeOpacity(opacity){return atlasTheme==='light'?Math.min(.95,opacity*6.5):opacity;}
 function setAtlasTheme(value,redraw=true){
   atlasTheme=value==='light'?'light':'dark';
   document.documentElement.dataset.theme=atlasTheme;
@@ -18,6 +20,7 @@ function setAtlasTheme(value,redraw=true){
   }
   const meta=document.querySelector('meta[name="theme-color"]');
   if(meta)meta.content=atlasPalette().chrome;
+  if(typeof syncBodyOutlineControls==='function')syncBodyOutlineControls();
   if(redraw)draw();
 }
 function initAtlasTheme(){
@@ -180,11 +183,11 @@ function rebuildBodyOutline(){
   if(!bodyOutlineGpu){
     const p=gl.createProgram();
     gl.attachShader(p,shader(gl.VERTEX_SHADER,`attribute vec3 aPos,aNormal;uniform vec3 uCenter;uniform float uRadius,uZoom,uAspect;uniform vec2 uPan;uniform mat3 uRot;varying vec3 vNormal;void main(){vec3 p=uRot*((aPos-uCenter)/uRadius);gl_Position=vec4(p.x*uZoom/uAspect+uPan.x,p.y*uZoom+uPan.y,-p.z/12.0,1.0);vNormal=uRot*aNormal;}`));
-    gl.attachShader(p,shader(gl.FRAGMENT_SHADER,`precision mediump float;uniform float uOpacity;uniform vec3 uOutlineColor;varying vec3 vNormal;void main(){float edge=pow(1.0-abs(normalize(vNormal).z),2.5);gl_FragColor=vec4(uOutlineColor,uOpacity*(.16+.84*edge));}`));
+    gl.attachShader(p,shader(gl.FRAGMENT_SHADER,`precision mediump float;uniform float uOpacity,uEdgeOpacity;uniform vec3 uOutlineColor;varying vec3 vNormal;void main(){float edge=pow(1.0-abs(normalize(vNormal).z),2.5);gl_FragColor=vec4(uOutlineColor,uOpacity*(.16+.84*edge)+(uEdgeOpacity-uOpacity)*edge);}`));
     // 神経用の属性番号を共用し、別のシェーダーへ戻したときも選択描画を保つ。
     for(const name of ['aPos','aNormal'])gl.bindAttribLocation(p,gl.getAttribLocation(prog,name),name);
     gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(p));
-    const uniforms={};for(const n of ['uCenter','uRadius','uZoom','uAspect','uPan','uRot','uOpacity','uOutlineColor'])uniforms[n]=gl.getUniformLocation(p,n);
+    const uniforms={};for(const n of ['uCenter','uRadius','uZoom','uAspect','uPan','uRot','uOpacity','uEdgeOpacity','uOutlineColor'])uniforms[n]=gl.getUniformLocation(p,n);
     bodyOutlineGpu={program:p,uniforms,v:gl.createBuffer(),e:gl.createBuffer()};
   }
   gl.bindBuffer(gl.ARRAY_BUFFER,bodyOutlineGpu.v);gl.bufferData(gl.ARRAY_BUFFER,data.vertices,gl.STATIC_DRAW);
@@ -197,7 +200,7 @@ function renderBodyOutline(pick=false){
   gl.useProgram(g.program);gl.bindBuffer(gl.ARRAY_BUFFER,g.v);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,g.e);
   for(const [name,offset]of [['aPos',0],['aNormal',12]]){const a=gl.getAttribLocation(g.program,name);gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,3,gl.FLOAT,false,24,offset);}
   gl.uniformMatrix3fv(u.uRot,false,rotation);gl.uniform3fv(u.uCenter,center);gl.uniform1f(u.uRadius,radius);
-  gl.uniform1f(u.uZoom,zoom*Math.min(1,canvas.width/canvas.height));gl.uniform1f(u.uAspect,canvas.width/canvas.height);gl.uniform2fv(u.uPan,pan);gl.uniform1f(u.uOpacity,bodyOutlineState.opacity);gl.uniform3fv(u.uOutlineColor,atlasPalette().outline);
+  gl.uniform1f(u.uZoom,zoom*Math.min(1,canvas.width/canvas.height));gl.uniform1f(u.uAspect,canvas.width/canvas.height);gl.uniform2fv(u.uPan,pan);gl.uniform1f(u.uOpacity,bodyOutlineState.opacity);gl.uniform1f(u.uEdgeOpacity,atlasBodyEdgeOpacity(bodyOutlineState.opacity));gl.uniform3fv(u.uOutlineColor,atlasPalette().outline);
   gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);
   gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);gl.drawElements(gl.TRIANGLES,g.count,gl.UNSIGNED_SHORT,0);
   gl.disable(gl.CULL_FACE);gl.disable(gl.BLEND);gl.depthMask(true);gl.useProgram(prog);
@@ -209,7 +212,7 @@ function syncBodyOutlineControls(){
   $('body-outline-labels').checked=bodyOutlineState.labels;
   for(const key of ['trunk','tail','opacity']){
     $('body-outline-'+key).value=bodyOutlineState[key];
-    $('body-outline-'+key+'-value').textContent=key==='opacity'?Math.round(bodyOutlineState[key]*100)+'%':bodyOutlineState[key].toFixed(2)+'倍';
+    $('body-outline-'+key+'-value').textContent=key==='opacity'?Math.round(atlasBodyEdgeOpacity(bodyOutlineState[key])*100)+'%'+(atlasTheme==='light'?'（縁）':''):bodyOutlineState[key].toFixed(2)+'倍';
     $('body-outline-'+key).disabled=!bodyOutlineState.enabled;
   }
   $('body-outline-badge').hidden=!bodyOutlineState.enabled;
@@ -422,26 +425,50 @@ function initGnrhReports(panel){
  const caveat=document.createElement('p');caveat.className='hint';caveat.textContent='RNA表には形態との対応が未確定な群も残しています。RNA検出とレポーター発現は同じ測定ではなく、発生時期や標本も異なります。GnRHR2/3のKH遺伝子対応は今回未確定です。';details.append(caveat);
  for(const [label,url] of [['Kusakabe et al. 2012：Fig. 1/2','https://doi.org/10.1371/journal.pone.0041955'],['Okawa et al. 2020：Fig. 2/3','https://pmc.ncbi.nlm.nih.gov/articles/PMC7596717/'],['Okawa et al. 2026：MN2・MGIN2','https://pubmed.ncbi.nlm.nih.gov/41738868/']]){const p=document.createElement('p'),a=document.createElement('a');a.textContent=label;a.href=url;a.target='_blank';a.rel='noopener';p.append(a);details.append(p);}panel.append(details);
 }
+// 既存の前後・左右の座標系に、参考輪郭と同じ推定背腹方向を加える。
+const orientationAxes=[
+ ['a','前 A','#ffd477',[0,0,-1]],['p','後 P','#ffd477',[0,0,1]],
+ ['l','左 L','#6bd9ed',[0,-1,0]],['r','右 R','#6bd9ed',[0,1,0]],
+ ['d','背 D','#d7a8ff',[-1,0,0]],['v','腹 V','#d7a8ff',[1,0,0]]
+];
 function initOrientation(){
- const box=document.createElement('div');box.id='orientation';box.setAttribute('aria-label','標本の前後左右');
- box.style.cssText='position:absolute;right:18px;top:76px;width:150px;height:155px;background:#10161fcc;border:1px solid #42556a;border-radius:9px;pointer-events:none;z-index:2;font-size:12px;';
- const label=document.createElement('div');label.textContent='標本の前後左右';label.style.cssText='text-align:center;padding:3px';box.append(label);
- for(const [id,text,color]of [['a','前 A','#ffd477'],['p','後 P','#ffd477'],['l','左 L','#6bd9ed'],['r','右 R','#6bd9ed']]){const line=document.createElement('div');line.id='axis-line-'+id;line.style.cssText='position:absolute;left:75px;top:80px;height:2px;transform-origin:0 0;background:'+color;const lab=document.createElement('span');lab.id='axis-label-'+id;lab.textContent=text;lab.style.cssText='position:absolute;color:'+color;box.append(line,lab);}
- const hint=document.createElement('div');hint.textContent='背腹は未校正';hint.style.cssText='position:absolute;bottom:3px;left:30px;color:#b7c7da;font-size:10px';box.append(hint);canvas.parentNode.append(box);
+ const box=document.createElement('div');box.id='orientation';box.setAttribute('aria-label','標本の前後左右・背腹方向（背腹は推定）');
+ box.style.cssText='position:absolute;right:18px;top:76px;width:180px;height:185px;background:#10161fcc;border:1px solid #42556a;border-radius:9px;pointer-events:none;z-index:2;font-size:12px;';
+ const label=document.createElement('div');label.textContent='標本の向き';label.style.cssText='text-align:center;padding:3px';box.append(label);
+ for(const [id,text,color]of orientationAxes){
+  const line=document.createElement('div');line.id='axis-line-'+id;line.style.cssText='position:absolute;left:90px;top:94px;height:2px;transform-origin:0 50%;background:'+color+';color:'+color;
+  if(id==='d'||id==='v'){
+   const arrow=document.createElement('span');arrow.className='axis-dv-arrow';arrow.style.cssText='position:absolute;right:-1px;top:-3px;width:0;height:0;border-top:4px solid transparent;border-bottom:4px solid transparent;border-left:6px solid currentColor;';line.append(arrow);
+  }
+  const lab=document.createElement('span');lab.id='axis-label-'+id;lab.textContent=text;lab.style.cssText='position:absolute;white-space:nowrap;color:'+color;
+  box.append(line,lab);
+ }
+ const hint=document.createElement('div');hint.textContent='背腹は文献から推定';hint.style.cssText='position:absolute;bottom:3px;left:0;width:100%;text-align:center;color:#b7c7da;font-size:10px';box.append(hint);canvas.parentNode.append(box);
  const b=document.createElement('button');b.textContent='前後・左右で見る';b.onclick=()=>{yaw=Math.PI/2;pitch=0;pan=[0,0];draw();};document.querySelector('.toolbar').append(b);
  updateOrientation();
 }
 function updateOrientation(){
  if(!$('orientation'))return;
- const cy=Math.cos(yaw),sy=Math.sin(yaw),cx=Math.cos(pitch),sx=Math.sin(pitch);
- // 元座標 -Z=前、+Z=後、-Y=左、+Y=右。8対のL/R名で検証。
- for(const [id,v]of [['a',[0,0,-1]],['p',[0,0,1]],['l',[0,-1,0]],['r',[0,1,0]]]){
+ const cy=Math.cos(yaw),sy=Math.sin(yaw),cx=Math.cos(pitch),sx=Math.sin(pitch),placed=[];
+ // -Z=前、+Z=後、-Y=左、+Y=右。-X=背、+X=腹は参考輪郭の文献に基づく推定。
+ for(const [id,text,color,v]of orientationAxes){
   const x=cy*v[0]+sy*v[2],y=-(sx*sy*v[0]+cx*v[1]-sx*cy*v[2]),depth=-cx*sy*v[0]+sx*v[1]+cx*cy*v[2];
-  const length=Math.hypot(x,y)*46,line=$('axis-line-'+id),lab=$('axis-label-'+id);
-  line.style.width=length+'px';line.style.transform='rotate('+Math.atan2(y,x)+'rad)';
-  const near=Math.hypot(x,y)<.2;lab.style.left=(near?(depth>0?91:40):75+x*55-15)+'px';lab.style.top=(near?77:80+y*55-8)+'px';lab.style.opacity=Math.abs(depth)>.8?'.65':'1';
+  const extent=Math.hypot(x,y),near=extent<.2,line=$('axis-line-'+id),lab=$('axis-label-'+id);
+  line.style.width=(extent*52)+'px';line.style.transform='rotate('+Math.atan2(y,x)+'rad)';line.style.visibility=near?'hidden':'visible';
+  // 軸を正面から見る場合は手前・奥を示し、反対向きのラベルを重ねない。
+  lab.textContent=near?id.toUpperCase()+(depth>0?' ⊙':' ⊗'):text;
+  lab.title=text+(near?(depth>0?'（手前）':'（奥）'):'')+((id==='d'||id==='v')?'・推定':'');
+  const width=40,height=17,baseLeft=near?(depth>0?105:35):90+x*66-width/2,baseTop=near?86:94+y*66-height/2;
+  let position;
+  // 斜めに回したとき、投影が近い軸同士の文字だけをずらす。軸の向きは変えない。
+  for(const [dx,dy]of [[0,0],[0,-18],[0,18],[-22,0],[22,0],[0,-36],[0,36],[-22,-18],[22,18]]){
+   const candidate={left:Math.max(3,Math.min(137,baseLeft+dx)),top:Math.max(25,Math.min(145,baseTop+dy))};
+   position=candidate;if(!placed.some(p=>Math.abs(p.left-candidate.left)<width+2&&Math.abs(p.top-candidate.top)<height+1))break;
+  }
+  placed.push(position);lab.style.left=position.left+'px';lab.style.top=position.top+'px';lab.style.opacity=depth<-.8?'.65':'1';
  }
 }
+
 
 // 文献の発現情報と形態分類を独立に管理する。未確認は陰性としない。
 let expressionMode='morphology';
